@@ -2,7 +2,8 @@ import  traceback
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDockWidget, QTreeWidget, QTreeWidgetItem,
     QWidget, QGridLayout, QLabel, QLineEdit, QComboBox, QTabWidget,
-    QGraphicsScene, QListWidget, QToolBar, QAction, QMessageBox, QDialog
+    QGraphicsScene, QListWidget, QToolBar, QAction, QMessageBox, QDialog, QListWidgetItem,
+    QActionGroup
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPen, QColor
@@ -10,6 +11,29 @@ from PyQt5.QtGui import QPen, QColor
 from drawing import DrawingApp
 from pad_editor import PadEditor
 from pad import Pad
+from layer_manager import LayerManager
+from layer_setting import LayerSetting
+
+# Layer type colors (example colors - adjust as needed)
+LAYER_COLORS = {
+    "silk": QColor(255, 255, 255, 200),  # White with transparency
+    "electric": QColor(0, 100, 255, 180),  # Blue with transparency
+    "solder": QColor(0, 180, 0, 180),  # Green with transparency
+    "paste": QColor(180, 180, 180, 180),  # Gray with transparency
+    "assembly": QColor(255, 200, 0, 180),  # Yellow with transparency
+    "board": QColor(30, 30, 30, 255),  # Dark gray
+    "plane": QColor(100, 50, 0, 200),  # Brown with transparency
+    "drill": QColor(255, 50, 50, 200),  # Red with transparency
+    "route": QColor(255, 100, 0, 200),  # Orange with transparency
+    "padstack": QColor(0, 200, 200, 200),  # Cyan with transparency
+    "viastack": QColor(200, 0, 200, 200),  # Magenta with transparency
+    "designRule": QColor(128, 0, 200, 150),  # Purple with transparency
+    "dimension": QColor(100, 200, 255, 180),  # Light blue with transparency
+    "keepoutRoute": QColor(255, 100, 100, 120),  # Light red with transparency
+    "keepoutDrill": QColor(255, 150, 50, 120),  # Light orange with transparency
+    "keepoutComponent": QColor(100, 255, 100, 120),  # Light green with transparency
+    "heightLimit": QColor(100, 100, 255, 120)  # Light blue with transparency
+}
 
 class main_app(QMainWindow):
     def __init__(self):
@@ -19,6 +43,8 @@ class main_app(QMainWindow):
             self.setGeometry(100, 100, 1200, 800)
             self.drawing_app = DrawingApp()  # Create an instance of DrawingApp
             self.init_ui()  # Call init_ui method
+            self.layer_manager = LayerManager(scene=self.drawing_app.scene, layers_widget=self.layers_widget)
+            self.add_default_layers()
         except Exception as e:
             # Fallback error handling
             print(f"Initialization Error: {e}")
@@ -64,10 +90,32 @@ class main_app(QMainWindow):
         # Design Menu
         design_menu = self.menubar.addMenu('Design')
         create_footprint_action = QAction('Create Footprint', self)
-        layer_manager_action = QAction('Layer Manager', self)
+        layer_manager_menu = design_menu.addMenu('Layer Manager')
+        add_layer_action = QAction('Add Layer', self)
+        layer_setting_action = QAction('Layer Setting', self)
+        add_layer_action.triggered.connect(lambda: self.add_custom_layer())
+        layer_setting_action.triggered.connect(lambda: self.open_layer_setting_dialog())
+        layer_manager_menu.addAction(add_layer_action)
+        layer_manager_menu.addAction(layer_setting_action)
         design_menu.addAction(create_footprint_action)
-        design_menu.addAction(layer_manager_action)
-    # Design tootbar
+
+    # Add layer
+    def add_custom_layer(self):
+        layer_name = f'Custom {len(self.layer_manager.layers) - 6}'
+        self.layer_manager.add_layer(layer_name)
+
+    def add_default_layers(self):
+        # Thêm các layer mặc định
+        index = 0
+        for layer, color in LAYER_COLORS.items():
+            self.layer_manager.add_layer(layer, color, z_index=index-len(LAYER_COLORS))
+        # self.layer_manager.add_layer("bottom_copper", QColor(0, 0, 255), z_index=-2)
+        # self.layer_manager.add_layer("top_mark", QColor(255, 0, 0), z_index=-1)
+        # self.layer_manager.add_layer("bottom_mark", QColor(0, 255, 0), z_index=0)
+        # self.layer_manager.add_layer("top_paste", QColor(255, 255, 0), z_index=1)
+        # self.layer_manager.add_layer("bottom_paste", QColor(255, 165, 0), z_index=2)
+
+    # Design toolbar
     def create_toolbar(self):
         toolbar = QToolBar('Design Tools')
         self.addToolBar(toolbar)
@@ -143,8 +191,15 @@ class main_app(QMainWindow):
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
     def create_right_sidebar(self):
-        dock = QDockWidget('Properties', self)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        layer_dock = QDockWidget('Layers', self)
+        layer_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.layers_widget = QListWidget()
+        self.layers_widget.itemChanged.connect(self.on_layer_checked)
+        self.layers_widget.itemSelectionChanged.connect(self.on_layer_selected)
+        layer_dock.setWidget(self.layers_widget)
+
+        prop_dock = QDockWidget('Properties', self)
+        prop_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         properties_widget = QWidget()
         layout = QGridLayout()
         properties = [
@@ -157,8 +212,10 @@ class main_app(QMainWindow):
             layout.addWidget(QLabel(label), i, 0)
             layout.addWidget(widget, i, 1)
         properties_widget.setLayout(layout)
-        dock.setWidget(properties_widget)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
+        prop_dock.setWidget(properties_widget)
+
+        self.addDockWidget(Qt.RightDockWidgetArea, layer_dock)
+        self.addDockWidget(Qt.RightDockWidgetArea, prop_dock)
 
     def create_bottom_panel(self):
         dock = QDockWidget('Messages', self)
@@ -214,3 +271,29 @@ class main_app(QMainWindow):
             pad.setSelected(True)
         except Exception as e:
             self.show_error_message("Pad Creation Error", f"Error creating pad: {str(e)}")
+
+    # Function to handle item check state change
+    def on_layer_checked(self, item):
+        if item.checkState() == Qt.CheckState.Checked:
+            self.layer_manager.show_layer(item.text())
+        else:
+            self.layer_manager.hide_layer(item.text())
+
+    # Function to handle item selection state change
+    def on_layer_selected(self):
+        selected_layer_name = self.layers_widget.selectedItems()[0].text()
+        self.drawing_app.layer = self.layer_manager.layers[selected_layer_name]
+
+    # Open layer dialog
+    def open_layer_setting_dialog(self):
+        try:
+            layer_setting = LayerSetting(self)
+            layer_setting.setWindowModality(Qt.ApplicationModal)
+
+            # Use a safe approach to show the dialog
+            if layer_setting.exec_() == QDialog.Accepted and layer_setting.current_pad:
+                self.add_pad_to_design(layer_setting.current_pad)
+        except Exception as e:
+            traceback_str = traceback.format_exc()
+            print(f"Error in pad editor: {str(e)}\n{traceback_str}")
+            self.show_error_message("Pad Editor Error", f"Error in pad editor: {str(e)}")

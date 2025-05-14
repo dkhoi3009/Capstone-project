@@ -15,10 +15,10 @@ try:
 except ImportError:
     class Pad: pass  # placeholder nếu không có class Pad
 
-class PadEditor(QDialog): 
+class LayerSetting(QDialog): 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Pad Editor")
+        self.setWindowTitle("Layer Setting")
         self.current_pad = None
         self.init_ui()
 

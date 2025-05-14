@@ -16,7 +16,7 @@ class DrawingApp(QMainWindow):
 
         self.drawing_mode = None
         self.selected_color = QColor(Qt.black)
-        self.layers = {0: []}
+        self.layer = None
 
         self.current_item = None
         self.start_point = None
@@ -67,7 +67,7 @@ class DrawingApp(QMainWindow):
 
     def mouse_release(self, event):
         if self.current_item:
-            self.layers[0].append(self.current_item)  # Lưu lại vào danh sách
+            self.layer["items"].append(self.current_item)  # Lưu lại vào danh sách
         self.current_item = None
 
     def mouse_move(self, event):
